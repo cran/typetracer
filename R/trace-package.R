@@ -1,21 +1,37 @@
 
 #' Trace all parameters for all functions in a specified package
 #'
-#' @param package Name of package to be traced (as character value)
-#' @param functions Optional character vector of names of functions to trace.
-#' Defaults to tracing all functions.
-#' @param types The types of code to be run to generate traces: one or both
-#' values of "examples" or "tests" (as for `tools::testInstalledPackage`).
+#' @param package Name of package to be traced (as character value).
 #' @param pkg_dir For "types" including "tests", a local directory to the source
 #' code of the package. (This is needed because installed versions do not
 #' generally include tests.)
+#' @param functions Optional character vector of names of functions to trace.
+#' Defaults to tracing all functions.
+#' @param types The types of code to be run to generate traces: one or both
+#' values of "examples" or "tests" (as for `tools::testInstalledPackage`). Note
+#' that only tests run via the \pkg{testthat} package can be traced.
+#' @param trace_lists If `TRUE`, trace into any nested list parameters
+#' (including `data.frame`-type objects), and return type information on each
+#' list component. The parameter names for these list-components are then
+#' specified in "dollar-notation", for example 'Orange$age'.
 #' @return A `data.frame` of data on every parameter of every function as
 #' specified in code provided in package examples.
 #' @export
+#' @examples
+#' \dontrun{
+#' res <- trace_package ("rematch")
+#' res <- trace_package (pkg_dir = "/<path>/<to>/<local>/<pacakge>")
+#' }
 trace_package <- function (package = NULL,
+                           pkg_dir = NULL,
                            functions = NULL,
                            types = c ("examples", "tests"),
-                           pkg_dir = NULL) {
+                           trace_lists = FALSE) {
+
+    types <- match.arg (types, c ("examples", "tests"),
+        several.ok = TRUE
+    )
+    set_trace_list_option (trace_lists)
 
     package <- assert_trace_package_inputs (package, types, pkg_dir)
     pkg_was_attached <- any (grepl (paste0 ("package:", package), search ()))
@@ -36,25 +52,15 @@ trace_package <- function (package = NULL,
     }
 
     # -------- TRACING
-    # The original `functions = NULL` has to be passed through to
-    # `trace_package_exs`, so modified here as `trace_fns`:
-    trace_fns <- functions
-    p <- paste0 ("package:", package)
-    if (is.null (trace_fns)) {
-        trace_fns <- ls (p, all.names = TRUE)
-    }
-    pkg_env <- as.environment (p)
-    for (f in trace_fns) {
-        f <- get (f, envir = pkg_env)
-        if (is.function (f)) {
-            inject_tracer (f)
-        }
-    }
+    trace_fns <-
+        inject_pkg_trace_fns (functions, package, trace_lists = trace_lists)
 
-    clear_traces ()
+    traces_ex <- NULL
 
     if ("examples" %in% types) {
         trace_names <- trace_package_exs (package, functions)
+        traces_ex <- list_traces ()
+        add_trace_source (traces_ex, "examples")
     }
     if ("tests" %in% types) {
         if (testthat_is_parallel (pkg_dir) && !pre_installed) {
@@ -65,37 +71,27 @@ trace_package <- function (package = NULL,
             test_traces <- NULL
         } else {
             test_traces <- trace_package_tests (package, pkg_dir, pre_installed)
+            traces_test <- list_traces ()
+            if (!is.null (traces_ex)) {
+                traces_test <- traces_test [which (!traces_test %in% traces_ex)]
+            }
+            add_trace_source (traces_test, "tests")
         }
     }
 
     traces <- load_traces (files = TRUE, quiet = TRUE)
-    traces$source <- NA_character_
 
-    if ("examples" %in% types) {
-        # join rd_name from trace_names:
-        traces$source <-
-            trace_names$rd_name [match (traces$trace_name, trace_names$trace)]
-        index <- which (!is.na (traces$source))
-        traces$source [index] <- paste0 ("rd_", traces$source [index])
-        traces$trace_name <- NULL
-    }
-    if ("tests" %in% types && length (test_traces) > 0L) {
-        traces <- join_test_trace_data (traces, test_traces)
+    if (!is.null (traces)) {
+
+        traces <- add_pkg_trace_sources (
+            traces,
+            trace_names,
+            test_traces,
+            types
+        )
     }
 
-    # Envvar to enable traces to remain so that package can be used by
-    # 'autotest', through loading traces after calling 'trace_package()'
-    if (!Sys.getenv ("TYPETRACER_LEAVE_TRACES") == "true") {
-        clear_traces ()
-    }
-
-    for (f in trace_fns) {
-        f <- get (f, envir = pkg_env)
-        if (is.function (f)) {
-            uninject_tracer (f)
-        }
-    }
-    clear_fn_bodies_dir ()
+    uninject_pkg_trace_fns (trace_fns, package)
 
     tryCatch (
         unloadNamespace (package),
@@ -109,10 +105,6 @@ trace_package <- function (package = NULL,
 assert_trace_package_inputs <- function (package = NULL,
                                          types = c ("examples", "tests"),
                                          pkg_dir = NULL) {
-
-    types <- match.arg (types, c ("examples", "tests"),
-        several.ok = TRUE
-    )
 
     if (!is.null (pkg_dir)) {
 
@@ -129,6 +121,46 @@ assert_trace_package_inputs <- function (package = NULL,
     checkmate::assert_scalar (package)
 
     return (package)
+}
+
+inject_pkg_trace_fns <- function (functions, package, trace_lists = FALSE) {
+
+    clear_traces ()
+
+    trace_fns <- functions
+    p <- paste0 ("package:", package)
+    if (is.null (trace_fns)) {
+        trace_fns <- ls (p, all.names = TRUE)
+    }
+
+    pkg_env <- as.environment (p)
+    for (fnm in trace_fns) {
+        f <- get (fnm, envir = pkg_env)
+        if (is.function (f)) {
+            inject_tracer (f, trace_lists = trace_lists)
+        }
+    }
+
+    return (trace_fns)
+}
+
+uninject_pkg_trace_fns <- function (trace_fns, package) {
+
+    p <- paste0 ("package:", package)
+    pkg_env <- as.environment (p)
+
+    for (f in trace_fns) {
+        f <- get (f, envir = pkg_env)
+        if (is.function (f)) {
+            uninject_tracer (f)
+        }
+    }
+
+    # Envvar to enable traces to remain so that package can be used by
+    # 'autotest', through loading traces after calling 'trace_package()'
+    if (!Sys.getenv ("TYPETRACER_LEAVE_TRACES") == "true") {
+        clear_traces ()
+    }
 }
 
 #' Trace all examples from a package
@@ -241,14 +273,13 @@ trace_package_tests <- function (package, pkg_dir = NULL,
         test_str <- data.frame (do.call (rbind, test_str))
         names (test_str) <- c ("file", "test_name")
         test_str$file <- file.path (
-            pkg_dir,
             testthat::test_path (),
             test_str$file
         )
         test_str$test <- gsub ("\\s+", "_", test_str$test_name)
         index <- match (test_trace_numbers$test, test_str$test)
         test_trace_numbers$test_name <- test_str$test_name [index]
-        test_trace_numbers$test_file <- basename (test_str$file [index])
+        test_trace_numbers$test_file <- test_str$file [index]
         test_trace_numbers$test <- NULL
         test_trace_numbers <-
             test_trace_numbers [, c ("test_file", "test_name", "trace_number")]
@@ -256,48 +287,6 @@ trace_package_tests <- function (package, pkg_dir = NULL,
     }
 
     return (test_trace_numbers)
-}
-
-testthat_is_parallel <- function (pkg_dir) {
-
-    flist <- list.files (pkg_dir, recursive = TRUE, full.names = TRUE)
-    desc <- grep ("DESCRIPTION$", flist, value = TRUE)
-    if (length (desc) != 1L) {
-        return (FALSE)
-    }
-    desc <- read.dcf (desc)
-    field <- "Config/testthat/parallel"
-    if (!field %in% colnames (desc)) {
-        return (FALSE)
-    }
-    ret <- as.logical (desc [1L, field])
-    ret <- ifelse (is.na (ret), FALSE, ret)
-
-    return (ret)
-}
-
-#' Remove testthat "parallel = true" config entry from DESCRIPTION
-#'
-#' Tests can not be traced in parallel (issue#10), so this line needs to be
-#' removed in order to enable tracing.
-#' @noRd
-rm_testthat_parallel <- function (pkg_dir) {
-
-    message (
-        "Tests can not be traced with testthat tests run in parallel; ",
-        "parallel testing has been temporarily deactivated."
-    )
-
-    flist <- list.files (pkg_dir, recursive = TRUE, full.names = TRUE)
-    desc_file <- grep ("DESCRIPTION$", flist, value = TRUE)
-    if (length (desc_file) != 1L) {
-        return (NULL)
-    }
-    desc <- brio::read_lines (desc_file)
-    field <- "Config/testthat/parallel"
-    desc <- desc [-grep (field, desc, fixed = TRUE)]
-
-    brio::write_lines (desc, desc_file)
 }
 
 get_pkg_examples <- function (package) {
@@ -361,6 +350,28 @@ get_pkg_examples <- function (package) {
     return (exs)
 }
 
+add_pkg_trace_sources <- function (traces, trace_names, test_traces, types) {
+
+    traces <- tibble::add_column (
+        traces,
+        source_file_name = NA,
+        .after = "trace_source"
+    )
+
+    if ("examples" %in% types) {
+        # join rd_name from trace_names:
+        trace_names$rd_name <- paste0 ("man/", trace_names$rd_name, ".Rd")
+        index <- match (traces$trace_name, trace_names$trace)
+        traces$source_file_name <- trace_names$rd_name [index]
+    }
+    if ("tests" %in% types && length (test_traces) > 0L) {
+        traces <- join_test_trace_data (traces, test_traces)
+    }
+    traces$trace_name <- traces$trace_source <- NULL
+
+    return (traces)
+}
+
 join_test_trace_data <- function (traces, test_traces) {
 
     if (!"trace_number" %in% names (test_traces) || nrow (test_traces) == 0L) {
@@ -396,7 +407,19 @@ join_test_trace_data <- function (traces, test_traces) {
     test_tr_index <- seq (tr_start1, tr_end1)
     traces_index <- which (traces$trace_number %in% test_tr_index)
     index <- match (traces$trace_number [traces_index], test_tr_index)
-    traces$source [traces_index] <- paste0 (test_files, "/", test_names) [index]
+    traces$source_file_name [traces_index] <-
+        paste0 (test_files, "/", test_names) [index]
 
     return (traces)
+}
+
+add_trace_source <- function (traces, trace_source) {
+
+    checkmate::assert_character (trace_source)
+
+    for (i in traces) {
+        tr <- readRDS (i)
+        tr$trace_source <- trace_source
+        saveRDS (tr, i)
+    }
 }

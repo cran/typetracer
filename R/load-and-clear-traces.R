@@ -8,6 +8,19 @@
 #' parameters, and values of each parameter traced in both unevaluated and
 #' evaluated forms.
 #' @export
+#' @examples
+#' f <- function (x, y, z, ...) {
+#'     x * x + y * y
+#' }
+#' inject_tracer (f)
+#' val <- f (1:2, 3:4 + 0., a = "blah")
+#' x <- load_traces ()
+#' print (x)
+#'
+#' # Traces should always be "uninjected":
+#' uninject_tracer (f)
+#' # Traces may also be removed:
+#' clear_traces ()
 load_traces <- function (files = FALSE, quiet = FALSE) {
 
     td <- get_typetrace_dir ()
@@ -20,25 +33,33 @@ load_traces <- function (files = FALSE, quiet = FALSE) {
         return (NULL)
     }
 
+    # These are 'meta'-level trace objects, which are moved into the main
+    # function environment here, and removed from traces. Traces from that point
+    # on may be analysed by iterating over sequences of parameter traces.
+    fn_name <- par_formals <- num_traces <-
+        trace_source <- call_envs <- NULL # nolint
+    trace_objs <- c (
+        "fn_name", "par_formals", "num_traces",
+        "trace_source", "call_envs"
+    )
+
     out <- lapply (traces, function (i) {
 
         tr_i <- readRDS (i)
 
-        fn_name <- tr_i$fn_name
-        par_formals <- tr_i$formals
-        num_traces <- tr_i$num_traces
-        tr_i <- tr_i [which (!names (tr_i) %in%
-            c ("fn_name", "formals", "num_traces"))]
+        for (to in trace_objs) {
+            assign (to, tr_i [[to]])
+        }
+
+        tr_i <- tr_i [which (!names (tr_i) %in% trace_objs)]
         fn_call_hash <- gsub ("^.*typetrace\\_|\\.Rds$", "", i)
 
         # simple vector columns:
         par_name <- vapply (tr_i, function (i) i$par, character (1L))
         types <- vapply (tr_i, function (i) i$type, character (1L))
         modes <- vapply (tr_i, function (i) i$mode, character (1L))
-        storage_mode <- vapply ( # wrapped coz otherwise > 80 char wide
-            tr_i, function (i) {
-                i$storage_mode
-            },
+        storage_mode <- vapply (
+            tr_i, function (i) i$storage_mode,
             character (1)
         )
         len <- vapply (tr_i, function (i) i$length, integer (1L))
@@ -48,11 +69,19 @@ load_traces <- function (files = FALSE, quiet = FALSE) {
         par_uneval <- I (lapply (tr_i, function (i) i$par_uneval))
         par_eval <- I (lapply (tr_i, function (i) i$par_eval))
 
-        tibble::tibble (
+        if (nrow (call_envs) == 0L) {
+            call_envs <- call_envs [1, ] # auto-fills with NA
+        }
+        call_envs$call_env <- paste0 (call_envs$namespace, "::", call_envs$name)
+        call_envs$call_env [which (is.na (call_envs$name))] <- NA_character_
+
+        out_i <- tibble::tibble (
             trace_name = i,
             trace_number = num_traces,
+            trace_source = trace_source,
             fn_name = fn_name,
             fn_call_hash = fn_call_hash,
+            call_env = call_envs$call_env,
             par_name = par_name,
             class = classes,
             typeof = types,
@@ -63,12 +92,46 @@ load_traces <- function (files = FALSE, quiet = FALSE) {
             uneval = par_uneval,
             eval = par_eval
         )
+
+        has_list <- integer (0L)
+        if (get_trace_lists_param ()) {
+            has_list <- which (vapply (
+                tr_i,
+                function (i) "list_data" %in% names (i),
+                logical (1L)
+            ))
+        }
+
+        if (length (has_list) > 0L) {
+
+            out_list_i <- lapply (tr_i [has_list], function (j) {
+                j_out <- do.call (rbind, lapply (j$list_data, as.data.frame))
+                j_out$par <- paste0 (j$par, "$", j_out$par)
+                return (j_out)
+            })
+            out_list_i <- do.call (rbind, out_list_i)
+            names (out_list_i) [names (out_list_i) == "par"] <- "par_name"
+            names (out_list_i) [names (out_list_i) == "par_uneval"] <- "uneval"
+            names (out_list_i) [names (out_list_i) == "par_eval"] <- "eval"
+
+            out_list <- out_i [integer (0L), ]
+            out_list <- out_list [seq_len (nrow (out_list_i)), ]
+            index <- match (names (out_list_i), names (out_list))
+            out_list [, index] <- out_list_i
+            index1 <- which (!names (out_list) %in% names (out_list_i))
+            index2 <- match (names (out_list) [index1], names (out_i))
+            out_list [, index1] <- out_i [seq_len (nrow (out_list_i)), index2]
+
+            out_i <- rbind (out_i, out_list)
+        }
+
+        return (out_i)
     })
 
     out <- do.call (rbind, out)
 
     if (!files) {
-        out$trace_name <- NULL
+        out$trace_name <- out$call_env <- NULL
     }
 
     out <- out [order (out$trace_number), ]
@@ -89,6 +152,21 @@ load_traces <- function (files = FALSE, quiet = FALSE) {
 #' @return (Invisibly) A single logical value indicating whether or not traces
 #' were successfully cleared.
 #' @export
+#' @examples
+#' f <- function (x, y, z, ...) {
+#'     x * x + y * y
+#' }
+#' inject_tracer (f)
+#' val <- f (1:2, 3:4 + 0., a = "blah")
+#' x <- load_traces ()
+#' print (x)
+#'
+#' # Then call 'clear_traces' to remove them:
+#' clear_traces ()
+#' # Trying to load again wil then indicate 'No traces found':
+#' x <- load_traces ()
+#' # Traces should also always be "uninjected":
+#' uninject_tracer (f)
 clear_traces <- function () {
 
     td <- get_typetrace_dir ()

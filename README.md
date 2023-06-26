@@ -2,6 +2,9 @@
 
 [![R-CMD-check](https://github.com/mpadge/typetracer/workflows/R-CMD-check/badge.svg)](https://github.com/mpadge/typetracer/actions)
 [![codecov](https://codecov.io/gh/mpadge/typetracer/branch/main/graph/badge.svg)](https://app.codecov.io/gh/mpadge/typetracer)
+[![CRAN\_Status\_Badge](https://www.r-pkg.org/badges/version/typetracer)](https://cran.r-project.org/package=typetracer/)
+[![CRAN
+Downloads](https://cranlogs.r-pkg.org/badges/grand-total/typetracer?color=orange)](https://cran.r-project.org/package=typetracer)
 <!-- badges: end -->
 
 # typetracer
@@ -19,11 +22,27 @@ demonstrated below.
 
 ## Installation
 
-The package can be installed with the following command:
+The stable version of the package can be installed with one of the
+following commands:
 
-    remotes::install_github ("mpadge/typetracer")
+    # Stable version from CRAN:
+    install.packages ("typetrace")
+    # Current development version from r-universe:
+    install.packages (
+        "typetracer",
+        repos = c ("https://mpadge.r-universe.dev", "https://cloud.r-project.org")
+    )
 
-Then loaded for use by calling `library`:
+Alternatively, for those who prefer to use other source code platforms,
+the package can also be installed by running any one of the following
+lines:
+
+    remotes::install_git ("https://git.sr.ht/~mpadge/dodgr")
+    remotes::install_git ("https://codeberg.org/UrbanAnalyst/dodgr")
+    remotes::install_bitbucket ("UrbanAnalyst/dodgr")
+    remotes::install_gitlab ("UrbanAnalyst/dodgr")
+
+The package can then loaded for use by calling `library`:
 
     library (typetracer)
 
@@ -64,14 +83,14 @@ from each function call.
     ## # A tibble: 7 × 12
     ##   trace_number fn_name fn_call_hash par_name class     typeof mode  storage_mode
     ##          <int> <chr>   <chr>        <chr>    <I<list>> <chr>  <chr> <chr>       
-    ## 1            0 f       acDVZHbn     x        <chr [1]> integ… nume… integer     
-    ## 2            0 f       acDVZHbn     y        <chr [1]> double nume… double      
-    ## 3            0 f       acDVZHbn     z        <chr [1]> NULL   NULL  NULL        
-    ## 4            0 f       acDVZHbn     ...      <chr [1]> NULL   NULL  NULL        
-    ## 5            0 f       acDVZHbn     a        <chr [1]> chara… char… character   
-    ## 6            0 f       acDVZHbn     b        <chr [1]> list   list  list        
-    ## 7            0 f       acDVZHbn     f        <chr [1]> langu… call  language    
-    ## # … with 4 more variables: length <int>, formal <named list>, uneval <I<list>>,
+    ## 1            0 f       uDgEbied     x        <chr [1]> integ… nume… integer     
+    ## 2            0 f       uDgEbied     y        <chr [1]> double nume… double      
+    ## 3            0 f       uDgEbied     z        <chr [1]> NULL   NULL  NULL        
+    ## 4            0 f       uDgEbied     ...      <chr [1]> NULL   NULL  NULL        
+    ## 5            0 f       uDgEbied     a        <chr [1]> chara… char… character   
+    ## 6            0 f       uDgEbied     b        <chr [1]> list   list  list        
+    ## 7            0 f       uDgEbied     f        <chr [1]> langu… call  language    
+    ## # ℹ 4 more variables: length <int>, formal <named list>, uneval <I<list>>,
     ## #   eval <I<list>>
 
 Each row of the result returned by `load_traces()` represents one
@@ -123,7 +142,7 @@ unevaluated and evaluated forms of parameters:
     ## 
     ## $f
     ## a ~ b
-    ## <environment: 0x561e5dd16c38>
+    ## <environment: 0x560b15656ca8>
 
 Unevaluated parameters are generally converted to equivalent character
 expressions.
@@ -159,12 +178,62 @@ For the function, `r`, above, this simply requires,
 
     ## [1] TRUE
 
+All traces can also be removed with this functions:
+
+    clear_traces ()
+
 Because `typetracer` modifies the internal code of functions as defined
 within a current R session, we strongly recommend restarting your R
 session after using `typetracer`, to ensure expected function behaviour
 is restored.
 
-## Example \#2 - Tracing a Package
+## Example \#2 - Recursion into lists
+
+R has extensive support for list structures, notably including all
+`data.frame`-like objects in which each column is actually a list item.
+`typetracer` also offers the ability to recurse into the list structures
+of individual parameters, to recursively trace the properties of each
+list item. To do this, the traces themselves have to be injected with
+the additional parameter, `trace_lists = TRUE`.
+
+The final call above included an additional parameter passed as a list.
+The following code re-injects a tracer with the ability to traverse into
+list structures:
+
+    inject_tracer (f, trace_lists = TRUE)
+    val <- f (
+        x = 1:2,
+        y = 3:4 + 0.,
+        a = "blah",
+        b = list (a = 1, b = "b"),
+        f = a ~ b
+    )
+    x_lists <- load_traces ()
+    print (x_lists)
+
+    ## # A tibble: 9 × 12
+    ##   trace_number fn_name fn_call_hash par_name class     typeof mode  storage_mode
+    ##          <int> <chr>   <chr>        <chr>    <I<list>> <chr>  <chr> <chr>       
+    ## 1            0 f       LzZIbYvx     x        <chr [1]> integ… nume… integer     
+    ## 2            0 f       LzZIbYvx     y        <chr [1]> double nume… double      
+    ## 3            0 f       LzZIbYvx     z        <chr [1]> NULL   NULL  NULL        
+    ## 4            0 f       LzZIbYvx     ...      <chr [1]> NULL   NULL  NULL        
+    ## 5            0 f       LzZIbYvx     a        <chr [1]> chara… char… character   
+    ## 6            0 f       LzZIbYvx     b        <chr [1]> list   list  list        
+    ## 7            0 f       LzZIbYvx     f        <chr [1]> langu… call  language    
+    ## 8            0 f       LzZIbYvx     b$a      <chr [1]> double nume… double      
+    ## 9            0 f       LzZIbYvx     b$b      <chr [1]> chara… char… character   
+    ## # ℹ 4 more variables: length <int>, formal <named list>, uneval <I<list>>,
+    ## #   eval <I<list>>
+
+And that result now has 9 rows, or 2 more than the previous example,
+reflecting the two items passed as a `list` to the parameter, `b`.
+List-parameter items are identifiable in typetracer output through the
+“dollar-notation” in the `par_name` field. The final two values in the
+above table are `b$a` and `b$b`, representing the two elements of the
+list passed as the parameter, `b`.
+
+## Example \#3 - Tracing a Package
 
 This section presents a more complex example tracing all function calls
 from [the `rematch` package](https://github.com/MangoTheCat/rematch),
@@ -176,36 +245,51 @@ automatically injects tracing code into every function within the
 package, so there is no need to explicitly call [the `inject_tracer()`
 function](https://mpadge.github.io/typetracer/reference/inject_tracer).
 
+(This function also includes a `trace_lists` parameter, as demonstrated
+above, with a default of `FALSE` to not recurse into tracing list
+structures.)
+
     res <- trace_package ("rematch")
     res
 
-    ## # A tibble: 8 × 13
-    ##   trace_number fn_name  fn_call_hash par_name class    typeof mode  storage_mode
-    ##          <int> <chr>    <chr>        <chr>    <I<list> <chr>  <chr> <chr>       
-    ## 1            0 re_match DMxsBqEc     pattern  <chr>    chara… char… character   
-    ## 2            0 re_match DMxsBqEc     text     <chr>    chara… char… character   
-    ## 3            0 re_match DMxsBqEc     perl     <chr>    logic… logi… logical     
-    ## 4            0 re_match DMxsBqEc     ...      <chr>    NULL   NULL  NULL        
-    ## 5            1 re_match clziFvXN     pattern  <chr>    chara… char… character   
-    ## 6            1 re_match clziFvXN     text     <chr>    chara… char… character   
-    ## 7            1 re_match clziFvXN     perl     <chr>    logic… logi… logical     
-    ## 8            1 re_match clziFvXN     ...      <chr>    NULL   NULL  NULL        
-    ## # … with 5 more variables: length <int>, formal <named list>, uneval <I<list>>,
-    ## #   eval <I<list>>, source <chr>
+    ## # A tibble: 8 × 14
+    ##   trace_number source_file_name fn_name  fn_call_hash call_env par_name class   
+    ##          <int> <chr>            <chr>    <chr>        <chr>    <chr>    <I<list>
+    ## 1            0 man/re_match.Rd  re_match UJfHAIRp     <NA>     pattern  <chr>   
+    ## 2            0 man/re_match.Rd  re_match UJfHAIRp     <NA>     text     <chr>   
+    ## 3            0 man/re_match.Rd  re_match UJfHAIRp     <NA>     perl     <chr>   
+    ## 4            0 man/re_match.Rd  re_match UJfHAIRp     <NA>     ...      <chr>   
+    ## 5            1 man/re_match.Rd  re_match Anyflkea     <NA>     pattern  <chr>   
+    ## 6            1 man/re_match.Rd  re_match Anyflkea     <NA>     text     <chr>   
+    ## 7            1 man/re_match.Rd  re_match Anyflkea     <NA>     perl     <chr>   
+    ## 8            1 man/re_match.Rd  re_match Anyflkea     <NA>     ...      <chr>   
+    ## # ℹ 7 more variables: typeof <chr>, mode <chr>, storage_mode <chr>,
+    ## #   length <int>, formal <named list>, uneval <I<list>>, eval <I<list>>
 
-The `data.frame` returned by the `trace_package()` function includes one
-more column than the result directly returned by `load_traces()`. This
-column is called “source”, and identifies the source-code object which
-generated each trace:
+The `data.frame` returned by the `trace_package()` function includes
+three more columns than the result directly returned by `load_traces()`.
+These columns identify the sources and calling environments of each
+function call being traces. The “call\_env” column identifies the
+calling environment which generated each trace, while
+“source\_file\_name” identifies the file.
 
-    unique (res$source)
+    unique (res$call_env)
 
-    ## [1] "rd_re_match"
+    ## [1] NA
 
-Tracing an installed package generally only extracts traces from example
-code, as documented in help, or `.Rd`, files. These are identified by
-the “rd\_” prefix on the source call, with the `rematch` package
-including only one `.Rd` file.
+    unique (res$source_file_name)
+
+    ## [1] "man/re_match.Rd"
+
+Although the “call\_env” columns contains no useful information for that
+package, it includes information on the full environment in which each
+function was called. These “environments” include such things as
+`tryCatch` calls expected to generate errors, or the various `expect_`
+functions of the [“testthat” package](https://testthat.r-lib.org/). The
+above case of racing an installed package generally only extracts traces
+from example code, as documented in help, or `.Rd`, files. These are
+identified by the “rd\_” prefix on the “source\_file\_name”, with the
+`rematch` package including only one `.Rd` file.
 
 [The `trace_package()`
 function](https://mpadge.github.io/typetracer/reference/trace_package.html)
@@ -213,12 +297,20 @@ also includes an additional parameter, `types`, which defaults to
 `c ("examples", "tests")`, so that traces are also by default generated
 for all tests included with local source packages (or for packages
 installed to include test files). The “source” column for test files
-identifies the names of each test, prefixed with “test\_”. Other than
-this column, the results are the same as shown above for
-`load_traces()`, with one line for every parameter passed to every
-function call in the examples.
+identifies the names of each test, prefixed with “test\_”.
 
-### Example \#2(a) - Specifying Functions to Trace
+The other two additional columns of “trace\_file” and “call\_env”
+respectively specify the source file and calling environment of each
+trace. These will generally only retain information from test files, in
+which case the source file will generally be the file name identified in
+the “source” column, and “call\_env” will specify the environment from
+which that function call originated. Environments may, for example,
+include various types of expectation from the [“testthat”
+package](https://testthat.r-lib.org). These calling environments are
+useful to discern whether, for example, a call was made with an
+expectation that it should error.
+
+### Example \#3(a) - Specifying Functions to Trace
 
 [The `trace_package()`
 function](https://mpadge.github.io/typetracer/reference/trace_package.html)
@@ -227,12 +319,13 @@ package should be traced. For example,
 
     x <- trace_package ("stats", functions = "sd")
 
-    ## # A tibble: 2 × 13
-    ##   trace_number fn_name fn_call_hash par_name class     typeof mode  storage_mode
-    ##          <int> <chr>   <chr>        <chr>    <I<list>> <chr>  <chr> <chr>       
-    ## 1            0 sd      EzasZOKV     x        <chr [1]> integ… nume… integer     
-    ## 2            0 sd      EzasZOKV     na.rm    <chr [1]> logic… logi… logical     
-    ## # … with 5 more variables: length <int>, formal <I<list>>, uneval <I<list>>,
+    ## # A tibble: 2 × 16
+    ##   trace_number trace_source fn_name fn_call_hash trace_file call_env par_name
+    ##          <int> <chr>        <chr>   <chr>        <chr>      <chr>    <chr>   
+    ## 1            0 examples     sd      EzasZOKV     <NA>       <NA>     x       
+    ## 2            0 examples     sd      EzasZOKV     <NA>       <NA>     na.rm   
+    ## # ℹ 9 more variables: class <I<list>>, typeof <chr>, mode <chr>,
+    ## #   storage_mode <chr>, length <int>, formal <I<list>>, uneval <I<list>>,
     ## #   eval <I<list>>, source <chr>
 
 ## Prior Art

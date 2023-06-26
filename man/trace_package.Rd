@@ -6,23 +6,30 @@
 \usage{
 trace_package(
   package = NULL,
+  pkg_dir = NULL,
   functions = NULL,
   types = c("examples", "tests"),
-  pkg_dir = NULL
+  trace_lists = FALSE
 )
 }
 \arguments{
-\item{package}{Name of package to be traced (as character value)}
+\item{package}{Name of package to be traced (as character value).}
+
+\item{pkg_dir}{For "types" including "tests", a local directory to the source
+code of the package. (This is needed because installed versions do not
+generally include tests.)}
 
 \item{functions}{Optional character vector of names of functions to trace.
 Defaults to tracing all functions.}
 
 \item{types}{The types of code to be run to generate traces: one or both
-values of "examples" or "tests" (as for \code{tools::testInstalledPackage}).}
+values of "examples" or "tests" (as for \code{tools::testInstalledPackage}). Note
+that only tests run via the \pkg{testthat} package can be traced.}
 
-\item{pkg_dir}{For "types" including "tests", a local directory to the source
-code of the package. (This is needed because installed versions do not
-generally include tests.)}
+\item{trace_lists}{If \code{TRUE}, trace into any nested list parameters
+(including \code{data.frame}-type objects), and return type information on each
+list component. The parameter names for these list-components are then
+specified in "dollar-notation", for example 'Orange$age'.}
 }
 \value{
 A \code{data.frame} of data on every parameter of every function as
@@ -30,4 +37,10 @@ specified in code provided in package examples.
 }
 \description{
 Trace all parameters for all functions in a specified package
+}
+\examples{
+\dontrun{
+res <- trace_package ("rematch")
+res <- trace_package (pkg_dir = "/<path>/<to>/<local>/<pacakge>")
+}
 }
