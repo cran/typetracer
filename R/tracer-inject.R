@@ -1,4 +1,3 @@
-
 #' Inject parameter tracer into one function
 #'
 #' @param f A function (that is, an object of class "function", and not a
@@ -63,7 +62,16 @@ cache_file_name <- function (f, f_name) {
 }
 
 reassign_function_body <- function (fun, body) {
-    invisible (.Call (reassign_function_body_, fun, body))
+    new_fn <- as.function (
+        c (as.list (formals (fun)), body),
+        envir = environment (fun)
+    )
+    attrs <- attributes (fun) [which (!names (attributes (fun)) == "srcref")]
+    if (length (attrs) > 0L) {
+        attributes (new_fn) <- attributes (fun)
+    }
+
+    invisible (.Call (reassign_function_body_, fun, new_fn))
 }
 
 
