@@ -1,6 +1,6 @@
 Package: typetracer
 Title: Trace Function Parameter Types
-Version: 0.2.3
+Version: 0.2.4
 Authors@R: c(
     person("Mark", "Padgham", , "mark.padgham@email.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-2172-5265")),
@@ -26,9 +26,9 @@ VignetteBuilder: knitr
 Config/testthat/edition: 3
 Encoding: UTF-8
 Language: en-GB
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.0.0
 NeedsCompilation: yes
-Packaged: 2025-12-03 13:31:44 UTC; smexus
+Packaged: 2026-07-30 08:28:20 UTC; smexus
 Author: Mark Padgham [aut, cre] (ORCID:
     <https://orcid.org/0000-0003-2172-5265>),
   Filip Krikava [ctb] (Author of original 'injectr' code on which this
@@ -37,4 +37,4 @@ Author: Mark Padgham [aut, cre] (ORCID:
     package included here in modified form.)
 Maintainer: Mark Padgham <mark.padgham@email.com>
 Repository: CRAN
-Date/Publication: 2025-12-03 13:50:02 UTC
+Date/Publication: 2026-07-30 14:10:08 UTC
