@@ -1,11 +1,13 @@
 Package: typetracer
 Title: Trace Function Parameter Types
-Version: 0.2.4
+Version: 0.2.5
 Authors@R: c(
     person("Mark", "Padgham", , "mark.padgham@email.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-2172-5265")),
     person("Filip", "Krikava", role = "ctb",
            comment = "Author of original 'injectr' code on which this package builds; https://github.com/PRL-PRG/injectr"),
+    person("Antoine", "Soetewey", , "antoine.soetewey@uclouvain.be", role = "ctb",
+           comment = c(ORCID = "0000-0001-8159-0804")),
     person("covr authors", role = "cph",
             comment = "Original authors of sections of code from 'covr' package included here in modified form.")
   )
@@ -28,13 +30,14 @@ Encoding: UTF-8
 Language: en-GB
 Config/roxygen2/version: 8.0.0
 NeedsCompilation: yes
-Packaged: 2026-07-30 08:28:20 UTC; smexus
+Packaged: 2026-08-27 12:41:04 UTC; smexus
 Author: Mark Padgham [aut, cre] (ORCID:
     <https://orcid.org/0000-0003-2172-5265>),
   Filip Krikava [ctb] (Author of original 'injectr' code on which this
     package builds; https://github.com/PRL-PRG/injectr),
+  Antoine Soetewey [ctb] (ORCID: <https://orcid.org/0000-0001-8159-0804>),
   covr authors [cph] (Original authors of sections of code from 'covr'
     package included here in modified form.)
 Maintainer: Mark Padgham <mark.padgham@email.com>
 Repository: CRAN
-Date/Publication: 2026-07-30 14:10:08 UTC
+Date/Publication: 2026-08-27 13:00:02 UTC
